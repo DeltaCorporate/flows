@@ -1,0 +1,593 @@
+{
+  "name": "Router::synchronise router's data from RMS to Directus",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "id": "09293f1e-7926-4004-93ba-160dfbb9859c",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        200,
+        320
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "output": "empty"
+      },
+      "id": "e03174fc-4018-4870-99c5-af7f76eba56e",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        2600,
+        440
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const allData = []\n\nlet counter = 0;\ndo {\n  try {\n    const items = $items(\"teltonikaRmsPerPage\", 0, counter).map(itemData => itemData.json);\n    allData.push.apply(allData, items);\n  } catch (error) {\n    return allData.map(data => ({ json: data}));  \n  }\n\n  counter++;\n} while(true);"
+      },
+      "id": "f021c7c8-aeeb-4e00-8400-812fa6146eb4",
+      "name": "mergePages",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1860,
+        780
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "76d2ede0-e324-4821-b6c0-df0dbd6501e5",
+      "name": "getOnlyData",
+      "type": "n8n-nodes-base.itemLists",
+      "position": [
+        2080,
+        780
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "let dataInDirectus = $('getRoutersDirectus').first().json.data;\n\nlet dataInRms = $('formatRmsData').all()\n// console.log(dataInDirectus);\n// console.log(dataInRms);\nlet toCreate = dataInRms.map(routerRms=>{\n  routerRms = routerRms.json;\n  let result = dataInDirectus.find(router=>router.rms_id === routerRms.rms_id)\n  if(!result) return routerRms;\n  return undefined;\n}).filter(result=>result !== undefined);\nreturn {\n  toCreate\n};"
+      },
+      "id": "504d3f00-b6d5-4934-812d-f79332baa5af",
+      "name": "getroutersToCreate",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        3040,
+        440
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "function compareObjects(obj1, obj2) {\n  if(typeof obj1 !== typeof obj2) return false;\n  if(!obj1 || !obj2) return false;\n  \n    let obj1Properties = Object.getOwnPropertyNames(obj1)\n    let obj2Properties = Object.getOwnPropertyNames(obj2)\n    // Trier les propriétés pour éviter les problèmes d'ordre\n    obj1Properties.sort();\n    obj2Properties.sort();\n    // Boucle sur les propriétés de chaque objet\n    for (let i = 0; i < obj1Properties.length; i++) {\n        let propName = obj1Properties[i];\n        // Si la propriété existe dans l'autre objet\n        if (obj2Properties.indexOf(propName) !== -1) {\n            // Si la propriété est un objet Date\n            if (new Date(obj1[propName]).toString() !== \"Invalid Date\" && new Date(obj2[propName]).toString() !== \"Invalid Date\") {\n                let date1 = new Date(obj1[propName]).toISOString();\n                let date2 = new Date(obj2[propName]).toISOString();\n                // Compare les propriétés de type date\n                if (date1 !== date2) {\n                    return false;\n                }\n            } \n            // Si la propriété est un objet\n            else if (typeof obj1[propName] === 'object') {\n                // Appeler la fonction compareObjects récursivement pour comparer les propriétés de ces sous-objets\n                if (!compareObjects(obj1[propName], obj2[propName])) {\n                    return false;\n                }\n            } \n            else if (obj1[propName] !== obj2[propName]) {\n                // Compare les autres propriétés\n                return false;\n            }\n        } else {\n            return false;\n        }\n    }\n    // Si aucune différence n'a été trouvée, retourner true\n    return true;\n}\n\n\nlet dataInDirectus = $('getRoutersDirectus').first().json.data;\nlet dataInRms = $('formatRmsData').all();\n\nlet toUpdate = dataInRms.map(router =>{\n  router = router.json\n  let rrouter = dataInDirectus.find(r=> r.serial === router.serial);\n  let backuprr = undefined;\n  \n  if(rrouter){\n    router.id = rrouter.id;\n    delete rrouter.id;\n    delete rrouter.user_created;\n    delete rrouter.date_created;\n    delete rrouter.user_updated;\n    delete rrouter.date_updated;\n    if(compareObjects(rrouter,router))\n      return undefined;\n  }\n  return router;\n}).filter(result=>result !== undefined);\n\nreturn toUpdate;"
+      },
+      "id": "8cf30737-48e6-4c2a-ae31-340efff90dbb",
+      "name": "getDataToUpdate",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        3140,
+        820
+      ],
+      "typeVersion": 1,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "content": "# DESCRIPTION\n\n## Ce flux permet de synchroniser les données de routeurs entre RMS et le directus opérations.\n\n## Le sens de synchro ation est de RMS vers directus\n",
+        "height": 224.5692722371965,
+        "width": 1190.6975741239892
+      },
+      "id": "7d64f7ae-751c-4fe4-9cb1-af4a209801f8",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        720,
+        -400
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  offset: items[0].json.offset || 0,\n  limit: 50\n};"
+      },
+      "id": "96ed796d-46ba-4aec-89da-4900510ad902",
+      "name": "pagination",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        400,
+        560
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "https://rms.teltonika-networks.com/api/devices",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "={{ $json[\"limit\"] }}"
+            },
+            {
+              "name": "offset",
+              "value": "={{ $json[\"offset\"] }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,model,name,serial,mac,last_connection_at,firmware,connection_state,iccid,sim_state,cell_tower_latitude,cell_tower_longitude,latitude,longitude,credit_enabled,credit_activated,credit_expire_date,monitoring_enabled,auto_extend_credit,connection_type,connection_state,cell_id"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "id": "710b2c21-eba7-4773-8ba7-9d4bcbb843a8",
+      "name": "teltonikaRmsPerPage",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        600,
+        560
+      ],
+      "typeVersion": 3,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "14",
+          "name": "rms - houmame"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [
+            {
+              "name": "offset",
+              "value": "={{ $node[\"pagination\"].json[\"offset\"]+$node[\"pagination\"].json[\"limit\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bef1c5c2-9a3a-47fa-8f91-dca989548d1d",
+      "name": "offsetIncrement",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1200,
+        580
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $node[\"teltonikaRmsPerPage\"].json[\"data\"].length }}",
+              "operation": "smallerEqual",
+              "value2": "=0"
+            }
+          ]
+        }
+      },
+      "id": "5a2d2aec-c0e3-4ec1-9383-19d64ad4cbe9",
+      "name": "checkForMorePages",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1640,
+        880
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "https://operations.bornerecharge.fr/items/rms",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "-1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4a776cd8-705d-40f5-b211-481f5c4b4ddf",
+      "name": "getRoutersDirectus",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1860,
+        200
+      ],
+      "typeVersion": 3,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "11",
+          "name": "Directus api operations - technical user"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field\n// called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  item.json.rms_id = item.json.id;\n  // item.json.last_connetion_at = new Date(item.json.last_connetion_at)\nitem.json.cell_tower_localisation = !item.json.cell_tower_longitude || !item.json.cell_tower_latitude ? null : {\n  \"type\": \"Point\",\n\t\"coordinates\": [\n\t\titem.json.cell_tower_longitude,\n\t\titem.json.cell_tower_latitude\n\t]\n};\n  \nitem.json.localisation = !item.json.longitude || !item.json.latitude ? null : {\n  \"type\": \"Point\",\n\t\"coordinates\": [\n\t\titem.json.longitude,\n\t\titem.json.latitude\n\t]\n}\n  item.json.credit_enabled = item.json.credit_enabled === 1 ? true : false;\n  item.json.credit_activated = item.json.credit_activated === 1 ? true : false;\n  item.json.monitoring_enabled = item.json.monitoring_enabled === 1 ? true : false;\n  item.json.monitoring_enabled = item.json.monitoring_enabled === 1 ? true : false;\n  item.json.auto_extend_credit = item.json.auto_extend_credit === 1 ? true : false;\n  \n  delete item.json.id;\n  delete item.json.cell_tower_latitude\n  delete item.json.cell_tower_longitude\n  delete item.json.longitude\n  delete item.json.latitude\n}\nreturn $input.all();"
+      },
+      "id": "e535dd20-bd22-4c1f-ba53-17e9def99290",
+      "name": "formatRmsData",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        2300,
+        780
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://operations.bornerecharge.fr/items/rms",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json[\"toCreate\"] }}",
+        "options": {}
+      },
+      "id": "598a201d-05d5-4e65-9355-fe934db32660",
+      "name": "createRouters",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        3260,
+        440
+      ],
+      "typeVersion": 3,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "11",
+          "name": "Directus api operations - technical user"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://operations.bornerecharge.fr/items/rms/{{ $json[\"id\"] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{ $json[\"model\"] }}"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json[\"name\"] }}"
+            },
+            {
+              "name": "serial",
+              "value": "={{ $json[\"serial\"] }}"
+            },
+            {
+              "name": "mac",
+              "value": "={{ $json[\"mac\"] }}"
+            },
+            {
+              "name": "last_connection_at",
+              "value": "={{ $json[\"last_connection_at\"] }}"
+            },
+            {
+              "name": "firmware",
+              "value": "={{ $json[\"firmware\"] }}"
+            },
+            {
+              "name": "connection_state",
+              "value": "={{ $json[\"connection_state\"] }}"
+            },
+            {
+              "name": "iccid",
+              "value": "={{ $json[\"iccid\"] }}"
+            },
+            {
+              "name": "sim_state",
+              "value": "={{ $json[\"sim_state\"] }}"
+            },
+            {
+              "name": "cell_tower_localisation",
+              "value": "={{ $json[\"cell_tower_localisation\"] }}"
+            },
+            {
+              "name": "localisation",
+              "value": "={{ $json[\"localisation\"] }}"
+            },
+            {
+              "name": "rms_id",
+              "value": "={{ $json[\"rms_id\"] }}"
+            },
+            {
+              "name": "credit_enabled",
+              "value": "={{ $json[\"credit_enabled\"] }}"
+            },
+            {
+              "name": "credit_activated",
+              "value": "={{ $json[\"credit_activated\"] }}"
+            },
+            {
+              "name": "credit_expire_date",
+              "value": "={{ $json[\"credit_expire_date\"] }}"
+            },
+            {
+              "name": "monitoring_enabled",
+              "value": "={{ $json[\"monitoring_enabled\"] }}"
+            },
+            {
+              "name": "auto_extend_credit",
+              "value": "={{ $json[\"auto_extend_credit\"] }}"
+            },
+            {
+              "name": "connection_type",
+              "value": "={{ $json[\"connection_type\"] }}"
+            },
+            {
+              "name": "cell_id",
+              "value": "={{ $json.cell_id }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 5,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "id": "5082730e-b3a9-4dcd-ba41-e1493eb54b38",
+      "name": "updateRouters",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        3380,
+        820
+      ],
+      "typeVersion": 3,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "11",
+          "name": "Directus api operations - technical user"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "output": "empty"
+      },
+      "id": "9cad1799-d6de-4579-880f-19e2ac237c33",
+      "name": "END",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        3640,
+        640
+      ],
+      "typeVersion": 2
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "getroutersToCreate",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "getDataToUpdate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mergePages": {
+      "main": [
+        [
+          {
+            "node": "getOnlyData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pagination": {
+      "main": [
+        [
+          {
+            "node": "teltonikaRmsPerPage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getOnlyData": {
+      "main": [
+        [
+          {
+            "node": "formatRmsData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "createRouters": {
+      "main": [
+        [
+          {
+            "node": "END",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatRmsData": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "updateRouters": {
+      "main": [
+        [
+          {
+            "node": "END",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "getDataToUpdate": {
+      "main": [
+        [
+          {
+            "node": "updateRouters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "offsetIncrement": {
+      "main": [
+        [
+          {
+            "node": "checkForMorePages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "getRoutersDirectus",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "pagination",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checkForMorePages": {
+      "main": [
+        [
+          {
+            "node": "mergePages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "pagination",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getRoutersDirectus": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getroutersToCreate": {
+      "main": [
+        [
+          {
+            "node": "createRouters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "teltonikaRmsPerPage": {
+      "main": [
+        [
+          {
+            "node": "offsetIncrement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "915f4dcd-42c3-4ade-a117-b2069e765d30",
+  "id": "9",
+  "meta": {
+    "instanceId": "c90987c3a8136dfd17ac8e7f10c77f44ee6d2bf92bb36b41fa6a4f3de21d46c4"
+  },
+  "tags": [
+    {
+      "createdAt": "2023-01-27T10:22:11.525Z",
+      "updatedAt": "2023-01-27T10:22:11.525Z",
+      "id": "2",
+      "name": "operations"
+    }
+  ]
+}
